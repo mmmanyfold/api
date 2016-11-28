@@ -32,10 +32,6 @@
         <AppenderRef ref="STDOUT"/>
         <AppenderRef ref="FILE"/>
     </logger>
-    <logger name="com.zaxxer.hikari" level="warn">
-        <AppenderRef ref="STDOUT"/>
-        <AppenderRef ref="FILE"/>
-    </logger>
     <root level="DEBUG">
         <appender-ref ref="STDOUT" />
         <appender-ref ref="FILE" />

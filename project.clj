@@ -6,10 +6,8 @@
   :dependencies [[bouncer "1.0.0"]
                  [ch.qos.logback/logback-classic "1.1.7"]
                  [compojure "1.5.1"]
-                 [conman "0.6.2"]
                  [cprop "0.1.9"]
                  [luminus-http-kit "0.1.4"]
-                 [luminus-migrations "0.2.8"]
                  [luminus-nrepl "0.1.4"]
                  [luminus/ring-ttl-session "0.3.1"]
                  [markdown-clj "0.9.91"]
@@ -19,7 +17,6 @@
                  [org.clojure/clojure "1.8.0"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/tools.logging "0.3.1"]
-                 [org.postgresql/postgresql "9.4.1212"]
                  [org.webjars.bower/tether "1.3.7"]
                  [org.webjars/bootstrap "4.0.0-alpha.5"]
                  [org.webjars/font-awesome "4.7.0"]
@@ -44,10 +41,8 @@
   :resource-paths ["resources"]
   :target-path "target/%s/"
   :main mmmanyfold.core
-  :migratus {:store :database :db ~(get (System/getenv) "DATABASE_URL")}
 
-  :plugins [[lein-cprop "1.0.1"]
-            [migratus-lein "0.4.3"]]
+  :plugins [[lein-cprop "1.0.1"]]
 
   :profiles
   {:uberjar {:omit-source true
