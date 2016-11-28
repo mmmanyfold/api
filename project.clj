@@ -34,7 +34,8 @@
                  [org.clojure/core.async "0.2.395"]
                  [cheshire "5.6.3"]
                  [environ "1.0.2"]
-                 [metosin/compojure-api "1.1.9"]]
+                 [metosin/compojure-api "1.1.9"]
+                 [nilenso/mailgun "0.2.3"]]
 
   :min-lein-version "2.0.0"
 
