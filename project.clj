@@ -27,7 +27,14 @@
                  [ring-middleware-format "0.7.0"]
                  [ring-webjars "0.1.1"]
                  [ring/ring-defaults "0.2.1"]
-                 [selmer "1.10.0"]]
+                 [selmer "1.10.0"]
+                 [ring-cors "0.1.8"]
+                 [ring/ring-json "0.4.0"]
+                 [clj-facebook-graph "0.4.0"]
+                 [org.clojure/core.async "0.2.395"]
+                 [cheshire "5.6.3"]
+                 [environ "1.0.2"]
+                 [metosin/compojure-api "1.1.9"]]
 
   :min-lein-version "2.0.0"
 
