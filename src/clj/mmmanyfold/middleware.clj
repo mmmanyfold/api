@@ -25,4 +25,4 @@
             (assoc-in [:security :anti-forgery] false)
             (assoc-in  [:session :store] (ttl-memory-store (* 60 30)))))
       (wrap-cors :access-control-allow-origin [#".+"]
-                 :access-control-allow-methods [:get])))
+                 :access-control-allow-methods [:get :post])))
