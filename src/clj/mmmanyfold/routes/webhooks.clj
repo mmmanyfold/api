@@ -2,7 +2,7 @@
   (:require [ring.util.http-response :refer [ok forbidden internal-server-error]]
             [ring.util.response :refer [redirect]]
             [org.httpkit.client :as http]
-            [compojure.api.sweet :refer [context GET POST]]))
+            [compojure.api.sweet :refer [context GET POST defroutes]]))
 
 (defn handle-fb-request [request]
   (let [token (get-in request [:params "hub.challenge"])
