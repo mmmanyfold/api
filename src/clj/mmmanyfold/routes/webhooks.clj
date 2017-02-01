@@ -33,9 +33,10 @@
 
 (defn handle-fb-request [request]
   (let [token (get-in request [:params "hub.challenge"])
-        request-body (slurp (request :body))]
-    (if request-body
-      (let [event (json/decode request-body true)
+        body (request :body)]
+    (if body
+      (let [request-body (slurp (request :body))
+            event (json/decode request-body true)
             verb (verb-parser event)
             message (case verb
                       "add" (comment-parser event)
