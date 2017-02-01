@@ -32,7 +32,8 @@
                  [cheshire "5.6.3"]
                  [environ "1.0.2"]
                  [metosin/compojure-api "1.1.9"]
-                 [nilenso/mailgun "0.2.3"]]
+                 [nilenso/mailgun "0.2.3"]
+                 [funcool/cuerdas "2.0.2"]]
 
   :min-lein-version "2.0.0"
 
