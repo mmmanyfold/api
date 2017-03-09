@@ -6,21 +6,22 @@
     [clj-facebook-graph [client :as client]]
     [ring.util.response :refer [response]]
     [org.httpkit.client :as http]
+    [ring.util.http-response :refer [ok]]
     [clojure.core.async :refer [>! <! >!! <!! go chan]]
     [cheshire.core :as json]))
 
 ; TODO: use gstem token
 (def ac {:access-token "EAAD79RJOZC4EBAFZCxlz5uBlXF1azljiPrn2qZCoe62fRLrVhzcCbHrUVwOvgW7bQcA9hcHiABBdKZCPAybbCvXh7L5MlWVfaqwORkNQJUsPoTlh6HyxIK5kkLc6y4FOSEsZBLKvAxNMMHWGBlVZCWE7v7r77rjIMZD"})
 
-(defn get-fb-feed []
-  (let [feed-request (with-facebook-auth ac (client/get [:me :feed] {:query-params {:limit 10} :extract :data}))
-        _(prn feed-request)
-        feed-messages (filterv (fn [feed-item]
-                                (println feed-item)
-                                (re-matches #"(?i)[#]resourc(e|es)$" (feed-item :message)))
-                        feed-request)]
-    (response feed-messages)))
+(def re-matches+ (fnil re-matches #"" ""))
+
+(defn get-fb-feed [request]
+  (let [feed-request (with-facebook-auth ac (client/get [:me :feed] {:query-params {:limit 10} :extract :data}))]
+    (let [filtered (filter :message feed-request)
+          regex #"(?i)[#]resourc(e|es)$"
+          feed-resources (filter #(re-matches+ regex (json/decode (:message %) true)) filtered)]
+      (ok feed-resources))))
 
 (defroutes gstem-routes
   (context "/facebook" []
-    (GET "/resources" [] (get-fb-feed))))
+    (GET "/resources" {} get-fb-feed)))
