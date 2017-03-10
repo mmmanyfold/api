@@ -10,8 +10,7 @@
     [clojure.core.async :refer [>! <! >!! <!! go chan]]
     [cheshire.core :as json]))
 
-; TODO: use gstem token
-(def ac {:access-token "EAAD79RJOZC4EBAFZCxlz5uBlXF1azljiPrn2qZCoe62fRLrVhzcCbHrUVwOvgW7bQcA9hcHiABBdKZCPAybbCvXh7L5MlWVfaqwORkNQJUsPoTlh6HyxIK5kkLc6y4FOSEsZBLKvAxNMMHWGBlVZCWE7v7r77rjIMZD"})
+(def ac {:access-token (System/getenv "GSTEM_FB_PAGE_ACCESS_TOKEN")})
 
 (defn get-fb-feed [request]
   (let [feed-request (with-facebook-auth ac (client/get [:me :feed] {:query-params {:limit 10} :extract :data}))]
