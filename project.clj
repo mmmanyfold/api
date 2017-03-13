@@ -43,7 +43,8 @@
   :target-path "target/%s/"
   :main mmmanyfold.core
 
-  :plugins [[lein-cprop "1.0.1"]]
+  :plugins [[lein-cprop "1.0.1"]
+            [lein-auto "0.1.3"]]
 
   :profiles
   {:uberjar {:omit-source true
