@@ -1,8 +1,10 @@
 # mmmanyfold
 
-generated using Luminus version "2.9.11.14"
-
-FIXME
+```clojure
+{:framework   "Generated using Luminus version 2.9.11.14"
+ :description "An API for mmmanyfold projects"
+ :url         "http://www.mmmanyfold.com/"}
+```
 
 ## Prerequisites
 
