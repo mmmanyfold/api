@@ -1,7 +1,7 @@
 (defproject mmmanyfold "0.1.0-SNAPSHOT"
 
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
+  :description "An API for mmmanyfold projects"
+  :url "http://www.mmmanyfold.com/"
 
   :dependencies [[bouncer "1.0.0"]
                  [ch.qos.logback/logback-classic "1.1.7"]
@@ -43,7 +43,8 @@
   :target-path "target/%s/"
   :main mmmanyfold.core
 
-  :plugins [[lein-cprop "1.0.1"]]
+  :plugins [[lein-cprop "1.0.1"]
+            [lein-auto "0.1.3"]]
 
   :profiles
   {:uberjar {:omit-source true

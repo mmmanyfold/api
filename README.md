@@ -1,8 +1,10 @@
 # mmmanyfold
 
-generated using Luminus version "2.9.11.14"
-
-FIXME
+```clojure
+{:framework   "Generated using Luminus version 2.9.11.14"
+ :description "An API for mmmanyfold projects"
+ :url         "http://www.mmmanyfold.com/"}
+```
 
 ## Prerequisites
 
@@ -15,7 +17,8 @@ You will need [Leiningen][1] 2.0 or above installed.
 To start a web server for the application, run:
 
     lein run
-
-## License
-
-Copyright © 2016 FIXME
+    
+## Testing
+    
+    lein test
+    lein auto test

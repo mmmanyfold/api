@@ -3,7 +3,6 @@
             [ring.util.response :refer [redirect]]
             [org.httpkit.client :as http]
             [cheshire.core :as json]
-            [cuerdas.core :as cuerdas]
             [compojure.api.sweet :refer [context GET POST defroutes]]))
 
 (defonce indico-api-key (System/getenv "INDICO_API_KEY"))
