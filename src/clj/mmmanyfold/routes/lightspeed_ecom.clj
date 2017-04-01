@@ -26,8 +26,9 @@
                 #(go
                    (let [{:keys [variants]} (json/parse-string (:body %) true)
                          priceExcl (map :priceExcl variants)
-                         sortedPrices (sort priceExcl)]
-                     (>! results-chan {id sortedPrices})))))))
+                         sortedPrices (sort priceExcl)
+                         priceRange ((juxt first last) sortedPrices)]
+                     (>! results-chan {id (distinct priceRange)})))))))
 
 
 (defn get-product-data [prop ids]
