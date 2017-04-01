@@ -29,10 +29,16 @@
       (swap! res conj (<!! c)))
     @res))
 
-(defn handle-product-images
+(defn handle-product-request
   "gets a list of images urls from each product"
   [req]
+
+  ;; @eemshi
+  ;; do this funciton would handle both
+  ;; but depending on the path we can do diff stuff...
+
   (let [product-ids (get-in req [:params :product-ids])
+        _ (prn req)
         product-ids-as-vector (read-string product-ids)
         product-images (get-product-images product-ids-as-vector)]
     (ok product-images)))
@@ -40,4 +46,5 @@
 (defroutes lightspeed-ecom-routes
   (context "/lightspeed-ecom" []
     (context "/products" []
-      (GET "/images" {params :params} handle-product-images))))
+      (GET "/images" {params :params} handle-product-request)
+      (GET "/prices" {params :params} handle-product-request))))
