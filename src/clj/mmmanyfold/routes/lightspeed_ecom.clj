@@ -31,7 +31,7 @@
 
 
 (defmulti multi-handle-product-request
-  "gets a list of images urls from each product"
+  "handle request for product data dependening on the /path"
           (fn [{path-info :path-info}]
             path-info))
 
