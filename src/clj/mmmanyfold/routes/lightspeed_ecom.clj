@@ -25,8 +25,9 @@
                 headers
                 #(go
                    (let [{:keys [variants]} (json/parse-string (:body %) true)
-                         priceExcl (map :priceExcl variants)]
-                     (>! results-chan {id priceExcl})))))))
+                         priceExcl (map :priceExcl variants)
+                         sortedPrices (sort priceExcl)]
+                     (>! results-chan {id sortedPrices})))))))
 
 
 (defn get-product-data [prop ids]
