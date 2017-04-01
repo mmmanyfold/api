@@ -10,20 +10,31 @@
 
 (defonce PICTURE_ROOM_LS_API_SECRET (System/getenv "PICTURE_ROOM_LS_API_SECRET"))
 
-(defn async-get-product-images [id results-chan]
-  (http/get (format "https://api.shoplightspeed.com/us/products/%s/images.json" id)
-            {:basic-auth [PICTURE_ROOM_LS_API_KEY PICTURE_ROOM_LS_API_SECRET]}
-            #(go
-               (let [{:keys [productImages]} (json/parse-string (:body %) true)
-                     src-urls (map :src productImages)]
-                 (>! results-chan {id src-urls})))))
+(defn async-get-product-images [id prop results-chan]
+  (let [headers {:basic-auth [PICTURE_ROOM_LS_API_KEY PICTURE_ROOM_LS_API_SECRET]}]
+    (case prop
+      :images
+      (http/get (format "https://api.shoplightspeed.com/us/products/%s/images.json" id)
+                headers
+                #(go
+                   (let [{:keys [productImages]} (json/parse-string (:body %) true)
+                         src-urls (map :src productImages)]
+                     (>! results-chan {id src-urls}))))
+      :prices
+      (http/get (format "https://api.shoplightspeed.com/us/variants.json?product=%s" id)
+                headers
+                #(go
+                   (let [{:keys [variants]} (json/parse-string (:body %) true)
+                         priceExcl (map :priceExcl variants)]
+                     (>! results-chan {id priceExcl})))))))
 
-(defn get-product-images [ids]
+
+(defn get-product-data [prop ids]
   (let [c (chan)
         res (atom [])]
     ;; fetch>!
     (doseq [id ids]
-      (async-get-product-images id c))
+      (async-get-product-images id prop c))
     ;; gather!
     (doseq [_ ids]
       (swap! res conj (<!! c)))
@@ -31,7 +42,7 @@
 
 
 (defmulti multi-handle-product-request
-  "handle request for product data dependening on the /path"
+          "handle request for product data dependening on the /path"
           (fn [{path-info :path-info}]
             path-info))
 
@@ -39,21 +50,15 @@
   [req]
   (if-let [product-ids (get-in req [:params :product-ids])]
     (let [product-ids-as-vector (read-string product-ids)
-          product-images (get-product-images product-ids-as-vector)]
+          product-images (get-product-data :images product-ids-as-vector)]
       (ok product-images))
     (bad-request "missing product-ids query param")))
 
 (defmethod multi-handle-product-request "/price-range"
   [req]
-
-  ;; @eemshi
-  ;; in this method we handle the case for prince-range
-  ;; we can even format the response on the fly here
-  ;; ie produce the range $50-150
-
   (if-let [product-ids (get-in req [:params :product-ids])]
     (let [product-ids-as-vector (read-string product-ids)
-          product-images (get-product-images product-ids-as-vector)]
+          product-images (get-product-data :prices product-ids-as-vector)]
       (ok product-images))
     (bad-request "missing product-ids query param")))
 
