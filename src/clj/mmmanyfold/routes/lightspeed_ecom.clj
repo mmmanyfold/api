@@ -1,5 +1,5 @@
 (ns mmmanyfold.routes.lightspeed-ecom
-  (:require [ring.util.http-response :refer [ok]]
+  (:require [ring.util.http-response :refer [ok bad-request]]
             [org.httpkit.client :as http]
             [cheshire.core :as json]
             [clojure.core :refer [read-string]]
@@ -30,23 +30,35 @@
     @res))
 
 
-(defn handle-product-request
+(defmulti multi-handle-product-request
   "gets a list of images urls from each product"
+          (fn [{path-info :path-info}]
+            path-info))
+
+(defmethod multi-handle-product-request "/images"
+  [req]
+  (if-let [product-ids (get-in req [:params :product-ids])]
+    (let [product-ids-as-vector (read-string product-ids)
+          product-images (get-product-images product-ids-as-vector)]
+      (ok product-images))
+    (bad-request "missing product images query param")))
+
+(defmethod multi-handle-product-request "/price-range"
   [req]
 
   ;; @eemshi
-  ;; do this funciton would handle both
-  ;; but depending on the path we can do diff stuff...
+  ;; in this method we handle the case for prince-range
+  ;; we can even format the response on the fly here
+  ;; ie produce the range $50-150
 
-  (let [product-ids (get-in req [:params :product-ids])
-        path-info (:path-info req)
-        _ (clojure.pprint/pprint req)]
-        ;product-ids-as-vector (read-string product-ids)]
-        ;product-images (get-product-images product-ids-as-vector)]
-    (ok [])))
+  (if-let [product-ids (get-in req [:params :product-ids])]
+    (let [product-ids-as-vector (read-string product-ids)
+          product-images (get-product-images product-ids-as-vector)]
+      (ok product-images))
+    (bad-request "missing product images query param")))
 
 (defroutes lightspeed-ecom-routes
   (context "/lightspeed-ecom" []
     (context "/products" []
-      (GET "/images" {params :params} handle-product-request)
-      (GET "/price-range" {params :params} handle-product-request))))
+      (GET "/images" {params :params} multi-handle-product-request)
+      (GET "/price-range" {params :params} multi-handle-product-request))))
