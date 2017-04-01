@@ -41,7 +41,7 @@
     (let [product-ids-as-vector (read-string product-ids)
           product-images (get-product-images product-ids-as-vector)]
       (ok product-images))
-    (bad-request "missing product images query param")))
+    (bad-request "missing product-ids query param")))
 
 (defmethod multi-handle-product-request "/price-range"
   [req]
@@ -55,7 +55,7 @@
     (let [product-ids-as-vector (read-string product-ids)
           product-images (get-product-images product-ids-as-vector)]
       (ok product-images))
-    (bad-request "missing product images query param")))
+    (bad-request "missing product-ids query param")))
 
 (defroutes lightspeed-ecom-routes
   (context "/lightspeed-ecom" []
