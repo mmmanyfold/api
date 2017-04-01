@@ -14,22 +14,23 @@
   (let [headers {:basic-auth [PICTURE_ROOM_LS_API_KEY PICTURE_ROOM_LS_API_SECRET]}]
     (case prop
       :images
-      (http/get (format "https://api.shoplightspeed.com/us/products/%s/images.json" id)
-                headers
-                #(go
-                   (let [{:keys [productImages]} (json/parse-string (:body %) true)
-                         src-urls (map :src productImages)]
-                     (>! results-chan {id src-urls}))))
+      (http/get
+        (format "https://api.shoplightspeed.com/us/products/%s/images.json" id)
+        headers
+        #(go
+           (let [{:keys [productImages]} (json/parse-string (:body %) true)
+                 src-urls (map :src productImages)]
+             (>! results-chan {id src-urls}))))
       :prices
-      (http/get (format "https://api.shoplightspeed.com/us/variants.json?product=%s" id)
-                headers
-                #(go
-                   (let [{:keys [variants]} (json/parse-string (:body %) true)
-                         priceExcl (map :priceExcl variants)
-                         sortedPrices (sort priceExcl)
-                         priceRange ((juxt first last) sortedPrices)]
-                     (>! results-chan {id (distinct priceRange)})))))))
-
+      (http/get
+        (format "https://api.shoplightspeed.com/us/variants.json?product=%s" id)
+        headers
+        #(go
+           (let [{:keys [variants]} (json/parse-string (:body %) true)
+                 priceExcl (map :priceExcl variants)
+                 sortedPrices (sort priceExcl)
+                 priceRange ((juxt first last) sortedPrices)]
+             (>! results-chan {id (distinct priceRange)})))))))
 
 (defn get-product-data [prop ids]
   (let [c (chan)
@@ -41,7 +42,6 @@
     (doseq [_ ids]
       (swap! res conj (<!! c)))
     @res))
-
 
 (defmulti multi-handle-product-request
           "handle request for product data dependening on the /path"
