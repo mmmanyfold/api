@@ -7,7 +7,8 @@
              [mmmanyfold.routes.fb-events :refer [fb-event-routes]]
              [mmmanyfold.routes.fb-events :refer [fb-event-routes]]
              [mmmanyfold.routes.secret :refer [secret-routes]]
-             [mmmanyfold.routes.gstem :refer [gstem-routes]]))
+             [mmmanyfold.routes.gstem :refer [gstem-routes]]
+             [mmmanyfold.routes.owlet :refer [owlet-routes]]))
 
 (defroutes api-routes
            (context "/api" []
@@ -17,5 +18,7 @@
              secret-routes)
            (context "/gstem" []
              gstem-routes)
+           (context "/owlet" []
+             owlet-routes)
            (context "/webhooks" []
              webhooks-routes))
