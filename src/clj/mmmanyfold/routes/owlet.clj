@@ -91,7 +91,6 @@
             (internal-server-error mail-transact!))))
       (internal-server-error status))))
 
-
 (defn handle-activity-subscribe
 
   "handles new subscription request
@@ -111,12 +110,20 @@
                            {:body (json/encode (conj coll email))})])))
       (internal-server-error status))))
 
-
-;; TODO: add unsubscribe handler
-
 (defn handle-activity-unsubscribe
   "handles unsubscribe request"
-  [req])
+  [req]
+  (let [email (-> req :params :email)
+        {:keys [status body]} @(http/get subscribers-endpoint)]
+    (if (= status 200)
+      (let [json (json/parse-string body true)
+            coll (remove nil? json)
+            removed (remove #{email} coll)]
+        (let [{:keys [status body]}
+              @(http/put subscribers-endpoint {:body (json/encode removed)})]
+          (if (= status 200)
+            (ok (format "Email: %s successfully unsubscribed." email))
+            (internal-server-error status)))))))
 
 (defroutes owlet-routes
            (context "/webhook" []
