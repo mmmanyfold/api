@@ -76,8 +76,8 @@
         {:keys [status body]} @(http/get subscribers-endpoint)]
     (if (= 200 status)
       (let [json (json/parse-string body true)
-            json (remove nil? json)
-            subscribers (clojure.string/join "," json)]
+            coll (remove nil? json)
+            subscribers (clojure.string/join "," coll)]
         (let [{:keys [subject html]} (compose-new-activity-email activity)
               mail-transact!
               (mail/send-mail creds
@@ -88,20 +88,33 @@
                                :html    html})]
           (if (= (:status mail-transact!) 200)
             (ok "Emailed Subscribers successfully.")
-            (internal-server-error mail-transact!)))))))
+            (internal-server-error mail-transact!))))
+      (internal-server-error status))))
 
-;; TODO: check list of subs b4 adding to list; ie no duplicates
 
 (defn handle-activity-subscribe
-  "handles new subscription request"
+
+  "handles new subscription request
+   -checks list of subs b4 adding to list; ie no duplicates"
+
   [req]
-  (let [{:keys [status body]}
-        @(http/put subscribers-endpoint {:body (json/encode {})})]))
+
+  (let [email (-> req :params :email)
+        {:keys [status body]} @(http/get subscribers-endpoint)]
+    (let [json (json/parse-string body true)
+          coll (remove nil? json)]
+      (if (= status 200)
+        (if (some #{email} coll)
+          (ok "Already Subscribed.")
+          (let [{:keys [status body]}
+                @(http/put subscribers-endpoint
+                           {:body (json/encode (conj coll email))})])))
+      (internal-server-error status))))
 
 
 ;; TODO: add unsubscribe handler
 
-(defn handle-unsubscribe
+(defn handle-activity-unsubscribe
   "handles unsubscribe request"
   [req])
 
@@ -109,7 +122,7 @@
            (context "/webhook" []
              (context "/content" []
                (POST "/subscribe" {params :params} handle-activity-publish)
-               (PUT "/unsubscribe" {params :params} handle-unsubscribe)
+               (PUT "/unsubscribe" {params :params} handle-activity-unsubscribe)
                (PUT "/subscribe" {params :params} handle-activity-subscribe)))
            (context "/api" []
              (context "/content" []
