@@ -6,7 +6,7 @@
             [mailgun.mail :as mail]
             [cheshire.core :as json]))
 
-(def creds {:key    (System/getenv "PLAYGROUND_MAILGUN_API_KEY")
+(def creds {:key    (System/getenv "MMM_MAILGUN_API_KEY")
             :domain "playgroundcoffeeshop.com"})
 
 (defonce OWLET-ACTIVITIES-3-MANAGEMENT-AUTH-TOKEN
@@ -87,7 +87,7 @@
                                :subject subject
                                :html    html})]
           (if (= (:status mail-transact!) 200)
-            (ok "Emailed Subscribers successfully.")
+            (ok "Emailed Subscribers Successfully.")
             (internal-server-error mail-transact!))))
       (internal-server-error status))))
 
