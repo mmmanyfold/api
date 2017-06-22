@@ -1,5 +1,6 @@
 (ns mmmanyfold.routes.owlet
   (:require [compojure.core :refer [defroutes GET POST PUT]]
+            [selmer.parser :refer [render-file]]
             [ring.util.http-response :refer [ok not-found internal-server-error]]
             [compojure.api.sweet :refer [context]]
             [org.httpkit.client :as http]
@@ -63,9 +64,11 @@
         title (-> activity :fields :title :en-US)
         author (-> activity :fields :author :en-US)
         branch (-> activity :fields :branch :en-US first)
+        skills (-> activity :fields :skills :en-US)
+        description (-> activity :fields :summary :en-US)
         subject (format "New Owlet Activity Published: %s by %s" title author)
         url (format "http://owlet.codefordenver.org/#/activity/#!%s" id)
-        html (format "<a href='%s'>%s</a> (%s)" url title branch)]
+        html (render-file "public/email.html" {:activity-id id :activity-image-url a :activity-title title :platform-name-kebab-case b :platform-color c :platform-name d :activity-description description :skill-names skills})]
     (hash-map :subject subject
               :html html)))
 
