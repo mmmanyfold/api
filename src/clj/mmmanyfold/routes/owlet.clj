@@ -1,11 +1,13 @@
 (ns mmmanyfold.routes.owlet
   (:require [compojure.core :refer [defroutes GET POST PUT]]
             [selmer.parser :refer [render-file]]
+            [selmer.filters :refer [add-filter!]]
             [ring.util.http-response :refer [ok not-found internal-server-error]]
             [compojure.api.sweet :refer [context]]
             [org.httpkit.client :as http]
             [mailgun.mail :as mail]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [camel-snake-kebab.core :refer [->kebab-case]]))
 
 (def creds {:key    (System/getenv "MMM_MAILGUN_API_KEY")
             :domain "playgroundcoffeeshop.com"})
@@ -68,7 +70,8 @@
         description (-> activity :fields :summary :en-US)
         subject (format "New Owlet Activity Published: %s by %s" title author)
         url (format "http://owlet.codefordenver.org/#/activity/#!%s" id)
-        html (render-file "public/email.html" {:activity-id id :activity-image-url a :activity-title title :platform-name-kebab-case b :platform-color c :platform-name d :activity-description description :skill-names skills})]
+        html (add-filter! :kebab #(->kebab-case %)
+               (render-file "public/email.html" {:activity-id id :activity-image-url "placeholder image url" :activity-title title :platform-color "placeholder platform color" :platform-name "placeholder platform name" :activity-description description :skill-names skills}))]
     (hash-map :subject subject
               :html html)))
 

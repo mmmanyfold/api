@@ -4,6 +4,7 @@
   :url "http://www.mmmanyfold.com/"
 
   :dependencies [[bouncer "1.0.0"]
+                 [camel-snake-kebab "0.4.0"]
                  [ch.qos.logback/logback-classic "1.1.7"]
                  [compojure "1.5.1"]
                  [cprop "0.1.9"]
