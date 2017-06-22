@@ -59,20 +59,16 @@
            :h   (get-in % [:fields :file :details :image :height]))))
     (into {})))
 
-(defn- image-gallery-vec-for-item [activity]
-  (->> (get-in activity [:fields :imageGallery])
-       (map (comp :id :sys))                   ; Gallery image ids.
-       (mapv image-by-id)))                    ; Their images.
-
 (defn- keywordize-name [name]
   (-> name ->kebab-case keyword))
 
 (def remove-nil (partial remove nil?))
 
-(defn- process-activities [activities platforms]
+(defn- process-activities [activities platforms assets]
   (let [processed
         (for [activity activities]
           (-> activity
+            ; Adds :platform data using :platformRef
             (assoc-in [:fields :platform]
                       (some #(when (= (get-in activity [:fields :platformRef :sys :id])
                                       (get-in % [:sys :id]))
@@ -80,23 +76,26 @@
                                              :search-name (str (->kebab-case (get-in % [:fields :name])))
                                              :color (get-in % [:fields :color])))
                         platforms))
-            (update-in [:fields :preview :sys]   ; Add img. URL at
-                       (fn [{id :id :as sys}]    ;  [.. :sys :url]
+            ; Adds preview img. URL at [.. :sys :url]
+            (update-in [:fields :preview :sys]
+                       (fn [{id :id :as sys}]
                          (assoc sys
                            :url
-                           (get-in image-by-id [id :url]))))
-            ;TODO: fix the following two assoc-ins
-            (assoc-in [:fields :image-gallery-items] ; Add gallery imgs.
-                      (image-gallery-vec-for-item activity))
-            ; Add :skills-set
-            (assoc-in [:fields :skill-set] #(or (some->> %
+                           (get-in (image-by-id assets) [id :url]))))
+            ; Adds :image-gallery-items
+            (assoc-in [:fields :image-gallery-items]
+                      (->> (get-in activity [:fields :imageGallery])
+                           (map (comp :id :sys))        ; Gallery image ids.
+                           (mapv (image-by-id assets))))
+            ; Add :skill-set
+            (assoc-in [:fields :skill-set] (or (some->> activity
                                                     :fields
                                                     :skills
                                                     remove-nil
-                                                    seq                 ; some->> gives nil if empty
+                                                    seq          ; some->> gives nil if empty
                                                     (map keywordize-name)
                                                     set)
-                                                %))))]
+                                               activity))))]
     processed))
 
 (defn handle-get-all-entries-for-given-space
@@ -118,7 +117,7 @@
               platforms (filter-entries "platform" (:items entries))
               activities (filter-entries "activity" (:items entries))]
           (ok {:metadata (process-metadata (:body @metadata))
-               :activities (process-activities activities platforms)
+               :activities (process-activities activities platforms assets)
                :platforms platforms}))
         (not-found status)))))
 
