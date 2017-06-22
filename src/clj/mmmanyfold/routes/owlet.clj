@@ -41,9 +41,67 @@
     {:skills   skills
      :branches branches}))
 
-(defn handle-get-all-entries-for-given-user-or-space
+(defn- filter-entries [content-type items]
+   (filter #(= content-type
+               (-> % (get-in [:sys :contentType :sys :id])))
+     items))
 
-  "asynchronously GET all entries for given user or space
+(defn- image-by-id
+  "Maps image IDs to associated URL, width, and height."
+  [assets]
+  (->> assets
+    (map
+      (juxt
+        (comp :id :sys)
+        #(hash-map
+           :url (get-in % [:fields :file :url])
+           :w   (get-in % [:fields :file :details :image :width])
+           :h   (get-in % [:fields :file :details :image :height]))))
+    (into {})))
+
+(defn- image-gallery-vec-for-item [activity]
+  (->> (get-in activity [:fields :imageGallery])
+       (map (comp :id :sys))                   ; Gallery image ids.
+       (mapv image-by-id)))                    ; Their images.
+
+(defn- keywordize-name [name]
+  (-> name ->kebab-case keyword))
+
+(def remove-nil (partial remove nil?))
+
+(defn- process-activities [activities platforms]
+  (let [processed
+        (for [activity activities]
+          (-> activity
+            (assoc-in [:fields :platform]
+                      (some #(when (= (get-in activity [:fields :platformRef :sys :id])
+                                      (get-in % [:sys :id]))
+                                   (hash-map :name (get-in % [:fields :name])
+                                             :search-name (str (->kebab-case (get-in % [:fields :name])))
+                                             :color (get-in % [:fields :color])))
+                        platforms))
+            (update-in [:fields :preview :sys]   ; Add img. URL at
+                       (fn [{id :id :as sys}]    ;  [.. :sys :url]
+                         (assoc sys
+                           :url
+                           (get-in image-by-id [id :url]))))
+            ;TODO: fix the following two assoc-ins
+            (assoc-in [:fields :image-gallery-items] ; Add gallery imgs.
+                      (image-gallery-vec-for-item activity))
+            ; Add :skills-set
+            (assoc-in [:fields :skill-set] #(or (some->> %
+                                                    :fields
+                                                    :skills
+                                                    remove-nil
+                                                    seq                 ; some->> gives nil if empty
+                                                    (map keywordize-name)
+                                                    set)
+                                                %))))]
+    processed))
+
+(defn handle-get-all-entries-for-given-space
+
+  "asynchronously GET all entries for given space
   optionally pass library-view=true param to get all entries for given space"
 
   [req]
@@ -55,8 +113,13 @@
           @(http/get (format "https://cdn.contentful.com/spaces/%1s/entries?" space-id) opts2)
           metadata (get-activity-metadata space-id opts1)]
       (if (= status 200)
-        (ok {:metadata (process-metadata (:body @metadata))
-             :entries  (json/parse-string body true)})
+        (let [entries (json/parse-string body true)
+              assets (get-in entries [:includes :Asset])
+              platforms (filter-entries "platform" (:items entries))
+              activities (filter-entries "activity" (:items entries))]
+          (ok {:metadata (process-metadata (:body @metadata))
+               :activities (process-activities activities platforms)
+               :platforms platforms}))
         (not-found status)))))
 
 (defn- compose-new-activity-email
@@ -147,4 +210,4 @@
                (PUT "/subscribe" {params :params} handle-activity-subscribe)))
            (context "/api" []
              (context "/content" []
-               (GET "/space" {params :params} handle-get-all-entries-for-given-user-or-space))))
+               (GET "/space" {params :params} handle-get-all-entries-for-given-space))))
