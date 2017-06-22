@@ -76,26 +76,31 @@
               :html html)))
 
 (defn handle-activity-publish
-  "Sends email to list fo subscribers"
+  "Sends email to list of subscribers"
   [req]
-  (let [activity (:params req)
-        {:keys [status body]} @(http/get subscribers-endpoint)]
-    (if (= 200 status)
-      (let [json (json/parse-string body true)
-            coll (remove nil? json)
-            subscribers (clojure.string/join "," coll)]
-        (let [{:keys [subject html]} (compose-new-activity-email activity)
-              mail-transact!
-              (mail/send-mail creds
-                              {:from    "owlet@mmmanyfold.com"
-                               :to      "owlet@mmmanyfold.com"
-                               :bcc     subscribers
-                               :subject subject
-                               :html    html})]
-          (if (= (:status mail-transact!) 200)
-            (ok "Emailed Subscribers Successfully.")
-            (internal-server-error mail-transact!))))
-      (internal-server-error status))))
+  (let [payload (:params req)
+        is-new-activity?
+        (and (= "activity" (get-in payload [:sys :contentType :sys :id]))
+             (= 1 (get-in payload [:sys :revision])))]
+    (if is-new-activity?
+      (let [{:keys [status body]} @(http/get subscribers-endpoint)]
+        (if (= 200 status)
+          (let [json (json/parse-string body true)
+                coll (remove nil? json)
+                subscribers (clojure.string/join "," coll)]
+            (let [{:keys [subject html]} (compose-new-activity-email payload)
+                  mail-transact!
+                  (mail/send-mail creds
+                                  {:from    "owlet@mmmanyfold.com"
+                                   :to      "owlet@mmmanyfold.com"
+                                   :bcc     subscribers
+                                   :subject subject
+                                   :html    html})]
+              (if (= (:status mail-transact!) 200)
+                (ok "Emailed Subscribers Successfully.")
+                (internal-server-error mail-transact!))))
+          (internal-server-error status)))
+      (ok "Not a new activity."))))
 
 (defn handle-activity-subscribe
 
@@ -113,8 +118,11 @@
           (ok "Already Subscribed.")
           (let [{:keys [status body]}
                 @(http/put subscribers-endpoint
-                           {:body (json/encode (conj coll email))})])))
-      (internal-server-error status))))
+                           {:body (json/encode (conj coll email))})]
+            (if (= status 200)
+              (ok "Subscribed.")
+              (internal-server-error status))))
+        (internal-server-error status)))))
 
 (defn handle-activity-unsubscribe
   "handles unsubscribe request"
@@ -134,7 +142,7 @@
 (defroutes owlet-routes
            (context "/webhook" []
              (context "/content" []
-               (POST "/subscribe" {params :params} handle-activity-publish)
+               (POST "/email" {params :params} handle-activity-publish)
                (PUT "/unsubscribe" {params :params} handle-activity-unsubscribe)
                (PUT "/subscribe" {params :params} handle-activity-subscribe)))
            (context "/api" []
