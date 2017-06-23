@@ -20,10 +20,20 @@
 
 (defonce subscribers-endpoint "https://owlet-users.firebaseio.com/subscribers.json")
 
+(add-filter! :kebab #(->kebab-case %))
+
 (defn- get-activity-metadata
   "GET all branches in Activity model for owlet-activities-2 space"
   [space-id headers]
   (http/get (format "https://api.contentful.com/spaces/%1s/content_types" space-id) headers))
+
+(defn- get-entry-by-id [space-id entry-id]
+  (http/get (format "https://cdn.contentful.com/spaces/%1s/entries/%2s" space-id entry-id)
+    {:headers {"Authorization" (str "Bearer " OWLET-ACTIVITIES-3-DELIVERY-AUTH-TOKEN)}}))
+
+(defn- get-asset-by-id [space-id asset-id]
+  (http/get (format "https://cdn.contentful.com/spaces/%1s/assets/%2s" space-id asset-id)
+    {:headers {"Authorization" (str "Bearer " OWLET-ACTIVITIES-3-DELIVERY-AUTH-TOKEN)}}))
 
 (defn- process-metadata
   [metadata]
@@ -64,39 +74,42 @@
 
 (def remove-nil (partial remove nil?))
 
-(defn- process-activities [activities platforms assets]
-  (let [processed
-        (for [activity activities]
-          (-> activity
-            ; Adds :platform data using :platformRef
-            (assoc-in [:fields :platform]
-                      (some #(when (= (get-in activity [:fields :platformRef :sys :id])
-                                      (get-in % [:sys :id]))
-                                   (hash-map :name (get-in % [:fields :name])
-                                             :search-name (str (->kebab-case (get-in % [:fields :name])))
-                                             :color (get-in % [:fields :color])))
-                        platforms))
-            ; Adds preview img. URL at [.. :sys :url]
-            (update-in [:fields :preview :sys]
-                       (fn [{id :id :as sys}]
-                         (assoc sys
-                           :url
-                           (get-in (image-by-id assets) [id :url]))))
-            ; Adds :image-gallery-items
-            (assoc-in [:fields :image-gallery-items]
-                      (->> (get-in activity [:fields :imageGallery])
-                           (map (comp :id :sys))        ; Gallery image ids.
-                           (mapv (image-by-id assets))))
-            ; Add :skill-set
-            (assoc-in [:fields :skill-set] (or (some->> activity
-                                                    :fields
-                                                    :skills
-                                                    remove-nil
-                                                    seq          ; some->> gives nil if empty
-                                                    (map keywordize-name)
-                                                    set)
-                                               activity))))]
-    processed))
+(defn- process-activity [activity platforms assets]
+  (-> activity
+    ; Adds :platform data using :platformRef
+    (assoc-in [:fields :platform]
+              (some #(when (= (get-in activity [:fields :platformRef :sys :id])
+                              (get-in % [:sys :id]))
+                           (hash-map :name (get-in % [:fields :name])
+                                     :search-name (str (->kebab-case (get-in % [:fields :name])))
+                                     :color (get-in % [:fields :color])))
+                platforms))
+    ; Adds preview img. URL at [.. :sys :url]
+    (update-in [:fields :preview :sys]
+               (fn [{id :id :as sys}]
+                 (assoc sys
+                   :url
+                   (get-in (image-by-id assets) [id :url]))))
+    ; Adds :image-gallery-items
+    (assoc-in [:fields :image-gallery-items]
+              (->> (get-in activity [:fields :imageGallery])
+                   (map (comp :id :sys))        ; Gallery image ids.
+                   (mapv (image-by-id assets))))
+    ; Add :skill-set
+    (assoc-in [:fields :skill-set] (or (some->> activity
+                                            :fields
+                                            :skills
+                                            remove-nil
+                                            seq          ; some->> gives nil if empty
+                                            (map keywordize-name)
+                                            set)
+                                       activity))))
+
+(defn- process-activities
+  [activities platforms assets]
+  (for [activity activities]
+    (process-activity activity platforms assets)))
+
 
 (defn handle-get-all-entries-for-given-space
 
@@ -127,13 +140,20 @@
   (let [id (-> activity :sys :id)
         title (-> activity :fields :title :en-US)
         author (-> activity :fields :author :en-US)
-        branch (-> activity :fields :branch :en-US first)
+        image-url (-> activity :fields :preview :sys :url)
+        platform-color (-> activity :fields :platform :color)
+        platform-name (-> activity :fields :platform :name)
         skills (-> activity :fields :skills :en-US)
         description (-> activity :fields :summary :en-US)
         subject (format "New Owlet Activity Published: %s by %s" title author)
         url (format "http://owlet.codefordenver.org/#/activity/#!%s" id)
-        html (add-filter! :kebab #(->kebab-case %)
-               (render-file "public/email.html" {:activity-id id :activity-image-url "placeholder image url" :activity-title title :platform-color "placeholder platform color" :platform-name "placeholder platform name" :activity-description description :skill-names skills}))]
+        html (render-file "public/activity-email.html" {:activity-id id}
+                                               :activity-image-url image-url
+                                               :activity-title title
+                                               :platform-color platform-color
+                                               :platform-name platform-name
+                                               :activity-description description
+                                               :skill-names skills)]
     (hash-map :subject subject
               :html html)))
 
@@ -150,17 +170,38 @@
           (let [json (json/parse-string body true)
                 coll (remove nil? json)
                 subscribers (clojure.string/join "," coll)]
-            (let [{:keys [subject html]} (compose-new-activity-email payload)
-                  mail-transact!
-                  (mail/send-mail creds
-                                  {:from    "owlet@mmmanyfold.com"
-                                   :to      "owlet@mmmanyfold.com"
-                                   :bcc     subscribers
-                                   :subject subject
-                                   :html    html})]
-              (if (= (:status mail-transact!) 200)
-                (ok "Emailed Subscribers Successfully.")
-                (internal-server-error mail-transact!))))
+            (let [space-id (get-in payload [:sys :space :sys :id])
+                  asset-id (get-in payload [:fields :preview :en-US :sys :id])
+                  {:keys [status body]} @(get-asset-by-id space-id asset-id)]
+              (if (= 200 status)
+                (let [body (json/parse-string body true)
+                      asset-url (get-in body [:fields :file :url])
+                      payload
+                      (-> payload
+                          (assoc-in [:fields :preview :sys :url] asset-url))]
+                  (let [entry-id (get-in payload [:fields :platformRef :en-US :sys :id])
+                        {:keys [status body]} @(get-entry-by-id space-id entry-id)]
+                    (if (= 200 status)
+                      (let [body (json/parse-string body true)
+                            platform-name (get-in body [:fields :name])
+                            platform-color (get-in body [:fields :color])
+                            payload
+                            (-> payload
+                              (assoc-in [:fields :platform :name] platform-name)
+                              (assoc-in [:fields :platform :color] platform-color))]
+                        (let [{:keys [subject html]} (compose-new-activity-email payload)
+                              mail-transact!
+                              (mail/send-mail creds
+                                              {:from    "owlet@mmmanyfold.com"
+                                               :to      "owlet@mmmanyfold.com"
+                                               :bcc     subscribers
+                                               :subject subject
+                                               :html    html})]
+                          (if (= (:status mail-transact!) 200)
+                            (ok "Emailed Subscribers Successfully.")
+                            (internal-server-error mail-transact!))))
+                      (internal-server-error status))))
+                (internal-server-error status))))
           (internal-server-error status)))
       (ok "Not a new activity."))))
 
