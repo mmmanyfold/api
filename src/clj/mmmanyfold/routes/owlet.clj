@@ -147,13 +147,13 @@
         description (-> activity :fields :summary :en-US)
         subject (format "New Owlet Activity Published: %s by %s" title author)
         url (format "http://owlet.codefordenver.org/#/activity/#!%s" id)
-        html (render-file "public/activity-email.html" {:activity-id id}
-                                               :activity-image-url image-url
-                                               :activity-title title
-                                               :platform-color platform-color
-                                               :platform-name platform-name
-                                               :activity-description description
-                                               :skill-names skills)]
+        html (render-file "public/activity-email.html" {:activity-id id
+                                                        :activity-image-url image-url
+                                                        :activity-title title
+                                                        :platform-color platform-color
+                                                        :platform-name platform-name
+                                                        :activity-description description
+                                                        :skill-names skills})]
     (hash-map :subject subject
               :html html)))
 
