@@ -10,7 +10,7 @@
             [camel-snake-kebab.core :refer [->kebab-case]]))
 
 (def creds {:key    (System/getenv "MMM_MAILGUN_API_KEY")
-            :domain "playgroundcoffeeshop.com"})
+            :domain "mg.codefordenver.org"})
 
 (defonce OWLET-ACTIVITIES-3-MANAGEMENT-AUTH-TOKEN
          (System/getenv "OWLET_ACTIVITIES_3_MANAGEMENT_AUTH_TOKEN"))
@@ -157,6 +157,24 @@
     (hash-map :subject subject
               :html html)))
 
+;TODO: update fb record & redirect to owlet confirmation route
+(defn handle-confirmation [req]
+  (let [email (get-in req [:params :email])
+        _ (prn "clicked confirmation link")]))
+
+(defn- send-confirmation-email [email]
+  "Sends confirmation email"
+  (let [url (format "http://0906f496.ngrok.io/owlet/webhook/content/confirm?email=%1s" email)
+        html (render-file "public/confirm-email.html" {:url url})
+        mail-transact!
+        (mail/send-mail creds
+                        {:from    "owlet@mmmanyfold.com"
+                         :to      email
+                         :subject "Please confirm your email address"
+                         :html    html})
+        _ (prn mail-transact!)]
+     (= (:status mail-transact!) 200)))
+
 (defn handle-activity-publish
   "Sends email to list of subscribers"
   [req]
@@ -217,13 +235,20 @@
     (let [json (json/parse-string body true)
           coll (remove nil? json)]
       (if (= status 200)
-        (if (some #{email} coll)
-          (ok "Already Subscribed.")
+        (if-let [existing-user (some #(= (:email %) email) coll)]
+          (if (:confirmed existing-user)
+            (ok "Already subscribed.")
+            (do
+              (send-confirmation-email email)
+              (ok "Re-sent confirmation email.")))
           (let [{:keys [status body]}
                 @(http/put subscribers-endpoint
-                           {:body (json/encode (conj coll email))})]
+                           {:body (json/encode (conj coll {:email email
+                                                           :confirmed false}))})]
             (if (= status 200)
-              (ok "Subscribed.")
+              (do
+                (send-confirmation-email email)
+                (ok "Added - awaiting confirmation."))
               (internal-server-error status))))
         (internal-server-error status)))))
 
@@ -247,7 +272,8 @@
              (context "/content" []
                (POST "/email" {params :params} handle-activity-publish)
                (PUT "/unsubscribe" {params :params} handle-activity-unsubscribe)
-               (PUT "/subscribe" {params :params} handle-activity-subscribe)))
+               (PUT "/subscribe" {params :params} handle-activity-subscribe)
+               (GET "/confirm" {params :params} handle-confirmation)))
            (context "/api" []
              (context "/content" []
                (GET "/space" {params :params} handle-get-all-entries-for-given-space))))
