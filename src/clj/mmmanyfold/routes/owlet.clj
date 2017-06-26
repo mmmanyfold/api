@@ -18,7 +18,12 @@
 (defonce OWLET-ACTIVITIES-3-DELIVERY-AUTH-TOKEN
          (System/getenv "OWLET_ACTIVITIES_3_DELIVERY_AUTH_TOKEN"))
 
+(defn epoch [] (int (/ (System/currentTimeMillis) 1000)))
+
 (defonce subscribers-endpoint "https://owlet-users.firebaseio.com/subscribers.json")
+
+(defn subscriber-endpoint [id]
+  (str "https://owlet-users.firebaseio.com/subscribers/" id ".json"))
 
 (add-filter! :kebab #(->kebab-case %))
 
@@ -159,12 +164,20 @@
 
 ;TODO: update fb record & redirect to owlet confirmation route
 (defn handle-confirmation [req]
-  (let [email (get-in req [:params :email])
-        _ (prn "clicked confirmation link")]))
+  (let [id (get-in req [:params :id])
+        {:keys [status body]} @(http/get (subscriber-endpoint id))]
+    (if (= 200 status)
+      (let [subscriber (json/parse-string body true)
+            {:keys [status body]}
+            @(http/put (subscriber-endpoint id)
+                       {:body (json/encode
+                               {:email (:email subscriber)
+                                :confirmed true})})]))))
 
-(defn- send-confirmation-email [email]
+
+(defn- send-confirmation-email [email id]
   "Sends confirmation email"
-  (let [url (format "http://0906f496.ngrok.io/owlet/webhook/content/confirm?email=%1s" email)
+  (let [url (format "http://a4aebbce.ngrok.io/owlet/webhook/content/confirm?id=%1s" id)
         html (render-file "public/confirm-email.html" {:url url})
         mail-transact!
         (mail/send-mail creds
@@ -235,19 +248,22 @@
     (let [json (json/parse-string body true)
           coll (remove nil? json)]
       (if (= status 200)
-        (if-let [existing-user (some #(= (:email %) email) coll)]
+        (if-let [existing-user (some #(when (= (:email %) email) %) (vals coll))]
           (if (:confirmed existing-user)
             (ok "Already subscribed.")
-            (do
-              (send-confirmation-email email)
+            (let [id (first (filter (comp #{{:email email :confirmed false}} coll)
+                                    (keys coll)))
+                  _ (prn id)]
+              (send-confirmation-email email id)
               (ok "Re-sent confirmation email.")))
-          (let [{:keys [status body]}
-                @(http/put subscribers-endpoint
-                           {:body (json/encode (conj coll {:email email
-                                                           :confirmed false}))})]
+          (let [id (epoch)
+                {:keys [status body]}
+                @(http/put (subscriber-endpoint id)
+                           {:body (json/encode {:email email
+                                                :confirmed false})})]
             (if (= status 200)
               (do
-                (send-confirmation-email email)
+                (send-confirmation-email email id)
                 (ok "Added - awaiting confirmation."))
               (internal-server-error status))))
         (internal-server-error status)))))
