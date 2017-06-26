@@ -204,6 +204,7 @@
              (= 1 (get-in payload [:sys :revision])))]
     (if is-new-activity?
       (let [{:keys [status body]} @(http/get subscribers-endpoint)]
+        ;TODO: normalize list of subscribers for this handler
         (if (= 200 status)
           (let [json (json/parse-string body true)
                 coll (remove nil? json)
