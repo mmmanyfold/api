@@ -3,6 +3,7 @@
             [selmer.parser :refer [render-file]]
             [selmer.filters :refer [add-filter!]]
             [ring.util.http-response :refer [ok not-found internal-server-error]]
+            [ring.util.response :refer [redirect]]
             [compojure.api.sweet :refer [context]]
             [org.httpkit.client :as http]
             [mailgun.mail :as mail]
@@ -17,6 +18,8 @@
 
 (defonce OWLET-ACTIVITIES-3-DELIVERY-AUTH-TOKEN
          (System/getenv "OWLET_ACTIVITIES_3_DELIVERY_AUTH_TOKEN"))
+
+(def owlet-url "http://owlet.codefordenver.org")
 
 (defn epoch [] (int (/ (System/currentTimeMillis) 1000)))
 
@@ -162,7 +165,7 @@
     (hash-map :subject subject
               :html html)))
 
-;TODO: update fb record & redirect to owlet confirmation route
+
 (defn handle-confirmation [req]
   (let [id (get-in req [:params :id])
         {:keys [status body]} @(http/get (subscriber-endpoint id))]
@@ -172,21 +175,25 @@
             @(http/put (subscriber-endpoint id)
                        {:body (json/encode
                                {:email (:email subscriber)
-                                :confirmed true})})]))))
+                                :confirmed true})})]
+        (if (= 200 status)
+          (redirect (str owlet-url "/#/subscribed/" (:email subscriber)))
+          (internal-server-error status)))
+      (internal-server-error status))))
 
 
 (defn- send-confirmation-email [email id]
   "Sends confirmation email"
-  (let [url (format "http://a4aebbce.ngrok.io/owlet/webhook/content/confirm?id=%1s" id)
+  (let [url (format "https://mmmanyfold-api.herokuapp.com/owlet/webhook/content/confirm?id=%1s" id)
         html (render-file "public/confirm-email.html" {:url url})
         mail-transact!
         (mail/send-mail creds
                         {:from    "owlet@mmmanyfold.com"
                          :to      email
                          :subject "Please confirm your email address"
-                         :html    html})
-        _ (prn mail-transact!)]
-     (= (:status mail-transact!) 200)))
+                         :html    html})]
+     (when (= (:status mail-transact!) 200)
+       (prn "Sent confirmation email to " email))))
 
 (defn handle-activity-publish
   "Sends email to list of subscribers"
@@ -245,15 +252,15 @@
 
   (let [email (-> req :params :email)
         {:keys [status body]} @(http/get subscribers-endpoint)]
-    (let [json (json/parse-string body true)
-          coll (remove nil? json)]
+    (let [coll (json/parse-string body true)]
       (if (= status 200)
         (if-let [existing-user (some #(when (= (:email %) email) %) (vals coll))]
           (if (:confirmed existing-user)
             (ok "Already subscribed.")
-            (let [id (first (filter (comp #{{:email email :confirmed false}} coll)
-                                    (keys coll)))
-                  _ (prn id)]
+            (let [id (-> (filter (comp #{{:email email :confirmed false}} coll)
+                                 (keys coll))
+                         first
+                         name)]
               (send-confirmation-email email id)
               (ok "Re-sent confirmation email.")))
           (let [id (epoch)
