@@ -19,7 +19,7 @@
 (defonce OWLET-ACTIVITIES-3-DELIVERY-AUTH-TOKEN
          (System/getenv "OWLET_ACTIVITIES_3_DELIVERY_AUTH_TOKEN"))
 
-(def owlet-url "http://owlet.codefordenver.org")
+(def owlet-url "http://localhost:4000")
 
 (defn epoch [] (int (/ (System/currentTimeMillis) 1000)))
 
@@ -171,21 +171,26 @@
         {:keys [status body]} @(http/get (subscriber-endpoint id))]
     (if (= 200 status)
       (let [subscriber (json/parse-string body true)
+            confirmed? (:confirmed subscriber)
             {:keys [status body]}
             @(http/put (subscriber-endpoint id)
                        {:body (json/encode
                                {:email (:email subscriber)
-                                :confirmed true})})]
+                                :confirmed (not confirmed?)})})]
         (if (= 200 status)
-          (redirect (str owlet-url "/#/subscribed/" (:email subscriber)))
+          (redirect (if confirmed?
+                      (str owlet-url "/#/unsubscribed/" (:email subscriber))
+                      (str owlet-url "/#/subscribed/" (:email subscriber))))
           (internal-server-error status)))
       (internal-server-error status))))
 
 
-(defn- send-confirmation-email [email id]
+(defn- send-confirmation-email [email id subscribing]
   "Sends confirmation email"
-  (let [url (format "https://mmmanyfold-api.herokuapp.com/owlet/webhook/content/confirm?id=%1s" id)
-        html (render-file "public/confirm-email.html" {:url url})
+  (let [url (format "http://localhost:3000/owlet/webhook/content/confirm?id=%1s" id)
+        html (if (= subscribing true)
+              (render-file "public/confirm-email.html" {:url url :un ""})
+              (render-file "public/confirm-email.html" {:url url :un "un"}))
         mail-transact!
         (mail/send-mail creds
                         {:from    "owlet@mmmanyfold.com"
@@ -262,7 +267,7 @@
                                  (keys coll))
                          first
                          name)]
-              (send-confirmation-email email id)
+              (send-confirmation-email email id true)
               (ok "Re-sent confirmation email.")))
           (let [id (epoch)
                 {:keys [status body]}
@@ -271,8 +276,8 @@
                                                 :confirmed false})})]
             (if (= status 200)
               (do
-                (send-confirmation-email email id)
-                (ok "Added - awaiting confirmation."))
+                (send-confirmation-email email id true)
+                (ok "Sent confirmation email."))
               (internal-server-error status))))
         (internal-server-error status)))))
 
@@ -281,15 +286,18 @@
   [req]
   (let [email (-> req :params :email)
         {:keys [status body]} @(http/get subscribers-endpoint)]
-    (if (= status 200)
-      (let [json (json/parse-string body true)
-            coll (remove nil? json)
-            removed (remove #{email} coll)]
-        (let [{:keys [status body]}
-              @(http/put subscribers-endpoint {:body (json/encode removed)})]
-          (if (= status 200)
-            (ok (format "Email: %s successfully unsubscribed." email))
-            (internal-server-error status)))))))
+    (let [coll (json/parse-string body true)]
+      (if (= status 200)
+        (if-let [existing-user (some #(when (= (:email %) email) %) (vals coll))]
+          (if (:confirmed existing-user)
+            (let [id (-> (filter (comp #{{:email email :confirmed true}} coll)
+                                 (keys coll))
+                         first
+                         name)]
+              (send-confirmation-email email id false)
+              (ok "Sent confirmation email."))
+            (ok "Not Subscribed.")))
+        (internal-server-error)))))
 
 (defroutes owlet-routes
            (context "/webhook" []
