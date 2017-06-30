@@ -3,6 +3,7 @@
             [selmer.parser :refer [render-file]]
             [selmer.filters :refer [add-filter!]]
             [ring.util.http-response :refer [ok not-found internal-server-error]]
+            [ring.util.response :refer [redirect]]
             [compojure.api.sweet :refer [context]]
             [org.httpkit.client :as http]
             [mailgun.mail :as mail]
@@ -10,7 +11,7 @@
             [camel-snake-kebab.core :refer [->kebab-case]]))
 
 (def creds {:key    (System/getenv "MMM_MAILGUN_API_KEY")
-            :domain "playgroundcoffeeshop.com"})
+            :domain "mg.codefordenver.org"})
 
 (defonce OWLET-ACTIVITIES-3-MANAGEMENT-AUTH-TOKEN
          (System/getenv "OWLET_ACTIVITIES_3_MANAGEMENT_AUTH_TOKEN"))
@@ -18,7 +19,14 @@
 (defonce OWLET-ACTIVITIES-3-DELIVERY-AUTH-TOKEN
          (System/getenv "OWLET_ACTIVITIES_3_DELIVERY_AUTH_TOKEN"))
 
+(def owlet-url "http://owlet.codefordenver.org")
+
+(defn epoch [] (int (/ (System/currentTimeMillis) 1000)))
+
 (defonce subscribers-endpoint "https://owlet-users.firebaseio.com/subscribers.json")
+
+(defn subscriber-endpoint [id]
+  (str "https://owlet-users.firebaseio.com/subscribers/" id ".json"))
 
 (add-filter! :kebab #(->kebab-case %))
 
@@ -157,6 +165,41 @@
     (hash-map :subject subject
               :html html)))
 
+
+(defn handle-confirmation [req]
+  (let [id (get-in req [:params :id])
+        {:keys [status body]} @(http/get (subscriber-endpoint id))]
+    (if (= 200 status)
+      (let [subscriber (json/parse-string body true)
+            confirmed? (:confirmed subscriber)
+            {:keys [status body]}
+            @(http/put (subscriber-endpoint id)
+                       {:body (json/encode
+                               {:email (:email subscriber)
+                                :confirmed (not confirmed?)})})]
+        (if (= 200 status)
+          (redirect (if confirmed?
+                      (str owlet-url "/#/unsubscribed/" (:email subscriber))
+                      (str owlet-url "/#/subscribed/" (:email subscriber))))
+          (internal-server-error status)))
+      (internal-server-error status))))
+
+
+(defn- send-confirmation-email [email id subscribing]
+  "Sends confirmation email"
+  (let [url (format "https://mmmanyfold-api.herokuapp.com/owlet/webhook/content/confirm?id=%1s" id)
+        html (if (= subscribing true)
+              (render-file "public/confirm-email.html" {:url url :un ""})
+              (render-file "public/confirm-email.html" {:url url :un "un"}))
+        mail-transact!
+        (mail/send-mail creds
+                        {:from    "owlet@mmmanyfold.com"
+                         :to      email
+                         :subject "Please confirm your email address"
+                         :html    html})]
+     (when (= (:status mail-transact!) 200)
+       (prn "Sent confirmation email to " email))))
+
 (defn handle-activity-publish
   "Sends email to list of subscribers"
   [req]
@@ -168,8 +211,9 @@
       (let [{:keys [status body]} @(http/get subscribers-endpoint)]
         (if (= 200 status)
           (let [json (json/parse-string body true)
-                coll (remove nil? json)
-                subscribers (clojure.string/join "," coll)]
+                users (map val json)
+                emails (for [user users :when (:confirmed user)] (:email user))
+                subscribers (clojure.string/join "," emails)]
             (let [space-id (get-in payload [:sys :space :sys :id])
                   asset-id (get-in payload [:fields :preview :en-US :sys :id])
                   {:keys [status body]} @(get-asset-by-id space-id asset-id)]
@@ -214,16 +258,26 @@
 
   (let [email (-> req :params :email)
         {:keys [status body]} @(http/get subscribers-endpoint)]
-    (let [json (json/parse-string body true)
-          coll (remove nil? json)]
+    (let [coll (json/parse-string body true)]
       (if (= status 200)
-        (if (some #{email} coll)
-          (ok "Already Subscribed.")
-          (let [{:keys [status body]}
-                @(http/put subscribers-endpoint
-                           {:body (json/encode (conj coll email))})]
+        (if-let [existing-user (some #(when (= (:email %) email) %) (vals coll))]
+          (if (:confirmed existing-user)
+            (ok "Already subscribed.")
+            (let [id (-> (filter (comp #{{:email email :confirmed false}} coll)
+                                 (keys coll))
+                         first
+                         name)]
+              (send-confirmation-email email id true)
+              (ok "Re-sent confirmation email.")))
+          (let [id (epoch)
+                {:keys [status body]}
+                @(http/put (subscriber-endpoint id)
+                           {:body (json/encode {:email email
+                                                :confirmed false})})]
             (if (= status 200)
-              (ok "Subscribed.")
+              (do
+                (send-confirmation-email email id true)
+                (ok "Sent confirmation email."))
               (internal-server-error status))))
         (internal-server-error status)))))
 
@@ -232,22 +286,26 @@
   [req]
   (let [email (-> req :params :email)
         {:keys [status body]} @(http/get subscribers-endpoint)]
-    (if (= status 200)
-      (let [json (json/parse-string body true)
-            coll (remove nil? json)
-            removed (remove #{email} coll)]
-        (let [{:keys [status body]}
-              @(http/put subscribers-endpoint {:body (json/encode removed)})]
-          (if (= status 200)
-            (ok (format "Email: %s successfully unsubscribed." email))
-            (internal-server-error status)))))))
+    (let [coll (json/parse-string body true)]
+      (if (= status 200)
+        (if-let [existing-user (some #(when (= (:email %) email) %) (vals coll))]
+          (if (:confirmed existing-user)
+            (let [id (-> (filter (comp #{{:email email :confirmed true}} coll)
+                                 (keys coll))
+                         first
+                         name)]
+              (send-confirmation-email email id false)
+              (ok "Sent confirmation email."))
+            (ok "Not Subscribed.")))
+        (internal-server-error)))))
 
 (defroutes owlet-routes
            (context "/webhook" []
              (context "/content" []
                (POST "/email" {params :params} handle-activity-publish)
                (PUT "/unsubscribe" {params :params} handle-activity-unsubscribe)
-               (PUT "/subscribe" {params :params} handle-activity-subscribe)))
+               (PUT "/subscribe" {params :params} handle-activity-subscribe)
+               (GET "/confirm" {params :params} handle-confirmation)))
            (context "/api" []
              (context "/content" []
                (GET "/space" {params :params} handle-get-all-entries-for-given-space))))
