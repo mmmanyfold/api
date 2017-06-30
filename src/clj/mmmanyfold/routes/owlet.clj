@@ -19,7 +19,7 @@
 (defonce OWLET-ACTIVITIES-3-DELIVERY-AUTH-TOKEN
          (System/getenv "OWLET_ACTIVITIES_3_DELIVERY_AUTH_TOKEN"))
 
-(def owlet-url "http://localhost:4000")
+(def owlet-url "http://owlet.codefordenver.org")
 
 (defn epoch [] (int (/ (System/currentTimeMillis) 1000)))
 
@@ -187,7 +187,7 @@
 
 (defn- send-confirmation-email [email id subscribing]
   "Sends confirmation email"
-  (let [url (format "http://localhost:3000/owlet/webhook/content/confirm?id=%1s" id)
+  (let [url (format "https://mmmanyfold-api.herokuapp.com/owlet/webhook/content/confirm?id=%1s" id)
         html (if (= subscribing true)
               (render-file "public/confirm-email.html" {:url url :un ""})
               (render-file "public/confirm-email.html" {:url url :un "un"}))
@@ -209,11 +209,11 @@
              (= 1 (get-in payload [:sys :revision])))]
     (if is-new-activity?
       (let [{:keys [status body]} @(http/get subscribers-endpoint)]
-        ;TODO: normalize list of subscribers for this handler
         (if (= 200 status)
           (let [json (json/parse-string body true)
-                coll (remove nil? json)
-                subscribers (clojure.string/join "," coll)]
+                users (map val json)
+                emails (for [user users :when (:confirmed user)] (:email user))
+                subscribers (clojure.string/join "," emails)]
             (let [space-id (get-in payload [:sys :space :sys :id])
                   asset-id (get-in payload [:fields :preview :en-US :sys :id])
                   {:keys [status body]} @(get-asset-by-id space-id asset-id)]
