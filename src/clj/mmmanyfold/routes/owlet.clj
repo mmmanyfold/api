@@ -56,7 +56,7 @@
                          :in))
         skills (pluck-prop "skills")
         branches (pluck-prop "branch")]
-    {:skills   skills
+    {:skills   (mapv keyword skills)
      :branches branches}))
 
 (defn- filter-entries [content-type items]
