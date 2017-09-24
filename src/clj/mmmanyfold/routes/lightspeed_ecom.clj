@@ -11,34 +11,44 @@
 
 (defonce PICTURE_ROOM_LS_API_SECRET (System/getenv "PICTURE_ROOM_LS_API_SECRET"))
 
-(defn async-get-product-images [id prop results-chan]
-  (let [headers {:basic-auth [PICTURE_ROOM_LS_API_KEY PICTURE_ROOM_LS_API_SECRET]}]
-    (case prop
-      :images
-      (http/get
-        (format "https://api.shoplightspeed.com/us/products/%s/images.json" id)
-        headers
-        #(go
-           (let [{:keys [productImages]} (json/parse-string (:body %) true)
-                 src-urls (map :src productImages)]
-             (>! results-chan {id src-urls}))))
-      :prices
-      (http/get
-        (format "https://api.shoplightspeed.com/us/variants.json?product=%s" id)
-        headers
-        #(go
-           (let [{:keys [variants]} (json/parse-string (:body %) true)
-                 priceExcl (map :priceExcl variants)
-                 sortedPrices (sort priceExcl)
-                 priceRange ((juxt first last) sortedPrices)]
-             (>! results-chan {id (distinct priceRange)})))))))
+(def basic-auth-header {:basic-auth [PICTURE_ROOM_LS_API_KEY PICTURE_ROOM_LS_API_SECRET]})
+
+(defn async-get-product-data [id prop results-chan]
+  (case prop
+    :images
+    (http/get
+      (format "https://api.shoplightspeed.com/us/products/%s/images.json" id)
+      basic-auth-header
+      #(go
+         (let [{:keys [productImages]} (json/parse-string (:body %) true)
+               src-urls (map :src productImages)]
+           (>! results-chan {id src-urls}))))
+    :featured
+    (http/get
+      (format "https://api.shoplightspeed.com/us/products/%s/filtervalues.json" id)
+      basic-auth-header
+      #(go
+         (let [{:keys [productFiltervalue]} (json/parse-string (:body %) true)]
+           (if-not (empty? productFiltervalue)
+             (>! results-chan {id true})
+             (>! results-chan {id false})))))
+    :prices
+    (http/get
+      (format "https://api.shoplightspeed.com/us/variants.json?product=%s" id)
+      basic-auth-header
+      #(go
+         (let [{:keys [variants]} (json/parse-string (:body %) true)
+               priceExcl (map :priceExcl variants)
+               sortedPrices (sort priceExcl)
+               priceRange ((juxt first last) sortedPrices)]
+           (>! results-chan {id (distinct priceRange)}))))))
 
 (defn get-product-data [prop ids]
   (let [c (chan)
         res (atom [])]
     ;; fetch>!
     (doseq [id ids]
-      (async-get-product-images id prop c))
+      (async-get-product-data id prop c))
     ;; gather!
     (doseq [_ ids]
       (swap! res conj (<!! c)))
@@ -65,8 +75,31 @@
       (ok product-images))
     (bad-request "missing product-ids query param")))
 
+
+; for getting featured products
+
+(defn get-product-ids-by-page [page]
+  (let [{:keys [status body]} @(http/get (format "https://api.shoplightspeed.com/us/products.json?fields=id,isVisible&limit=250&page=%s" page) basic-auth-header)]
+    (if (= status 200)
+      (let [{products :products} (json/parse-string body true)
+            products-visible (filter #(:isVisible %) products)]
+        (map :id products-visible))
+      status)))
+
+(defn get-product-visible-ids []
+  (loop [i 1 all-ids []]
+    (let [res (get-product-ids-by-page i)]
+      (if-not (empty? res)
+        (recur (inc i) (concat all-ids res))
+        all-ids))))
+
+(defn get-featured-products [_]
+  (let [product-visible-ids (get-product-visible-ids)]
+    (ok (get-product-data :featured product-visible-ids))))
+
 (defroutes lightspeed-ecom-routes
   (context "/lightspeed-ecom" []
     (context "/products" []
+      (GET "/featured" {params :params} get-featured-products)
       (GET "/images" {params :params} multi-handle-product-request)
       (GET "/price-range" {params :params} multi-handle-product-request))))
