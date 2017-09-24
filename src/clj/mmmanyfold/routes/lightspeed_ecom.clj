@@ -20,28 +20,26 @@
       (format "https://api.shoplightspeed.com/us/products/%s/images.json" id)
       basic-auth-header
       #(go
-         (let [{:keys [productImages]} (json/parse-string (:body %) true)
+         (let [{productImages :productImages} (json/parse-string (:body %) true)
                src-urls (map :src productImages)]
-           (>! results-chan {id src-urls}))))
+           (>! results-chan {id (vec src-urls)}))))
     :featured
     (http/get
-      (format "https://api.shoplightspeed.com/us/products/%s/filtervalues.json" id)
+      (format "https://api.shoplightspeed.com/us/products/%s.json" id)
       basic-auth-header
       #(go
-         (let [{:keys [productFiltervalue]} (json/parse-string (:body %) true)]
-           (if-not (empty? productFiltervalue)
-             (>! results-chan {id true})
-             (>! results-chan {id false})))))
+         (let [{product :product} (json/parse-string (:body %) true)]
+            (>! results-chan product))))
     :prices
     (http/get
       (format "https://api.shoplightspeed.com/us/variants.json?product=%s" id)
       basic-auth-header
       #(go
-         (let [{:keys [variants]} (json/parse-string (:body %) true)
+         (let [{variants :variants} (json/parse-string (:body %) true)
                priceExcl (map :priceExcl variants)
                sortedPrices (sort priceExcl)
                priceRange ((juxt first last) sortedPrices)]
-           (>! results-chan {id (distinct priceRange)}))))))
+           (>! results-chan {id (vec (distinct priceRange))}))))))
 
 (defn get-product-data [prop ids]
   (let [c (chan)
@@ -78,24 +76,27 @@
 
 ; for getting featured products
 
-(defn get-product-ids-by-page [page]
-  (let [{:keys [status body]} @(http/get (format "https://api.shoplightspeed.com/us/products.json?fields=id,isVisible&limit=250&page=%s" page) basic-auth-header)]
-    (if (= status 200)
-      (let [{products :products} (json/parse-string body true)
-            products-visible (filter #(:isVisible %) products)]
-        (map :id products-visible))
-      status)))
-
-(defn get-product-visible-ids []
-  (loop [i 1 all-ids []]
-    (let [res (get-product-ids-by-page i)]
-      (if-not (empty? res)
-        (recur (inc i) (concat all-ids res))
-        all-ids))))
-
 (defn get-featured-products [_]
-  (let [product-visible-ids (get-product-visible-ids)]
-    (ok (get-product-data :featured product-visible-ids))))
+  (let [{:keys [status body]} @(http/get "https://api.shoplightspeed.com/us/tags/products.json" basic-auth-header)]
+    (if (= 200 status)
+      (let [{tagsProducts :tagsProducts} (json/parse-string body true)
+            featured-tag-id 150470
+            featured-tag-data (filter #(= (-> % :tag :resource :id) featured-tag-id) tagsProducts)
+            featured-product-ids (map #(-> % :product :resource :id) featured-tag-data)
+            featured-products (get-product-data :featured featured-product-ids)
+            ;; filter visible products
+            featured-visible (filter #(:isVisible %) featured-products)
+            featured-visible-ids (map :id featured-visible)
+            product-price-range (map #(hash-map (first (keys %)) (hash-map :price-range (first (vals %))))
+                                     (sort-by first (get-product-data :prices featured-visible-ids)))
+            product-images (map #(hash-map (first (keys %)) (hash-map :images (first (vals %))))
+                                (sort-by first (get-product-data :images featured-visible-ids)))
+            select-product-data (sort-by first
+                                  (map #(hash-map (:id %) (dissoc % :id))
+                                     (map #(select-keys % [:id :url :title :brand]) featured-visible)))]
+        (ok (map #(merge-with into %1 %2 %3) product-price-range product-images select-product-data)))
+      (bad-request "Unable to retrieve product tags"))))
+
 
 (defroutes lightspeed-ecom-routes
   (context "/lightspeed-ecom" []
