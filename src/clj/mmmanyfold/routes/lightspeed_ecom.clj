@@ -110,8 +110,9 @@
                                               product-brand-title (get brand-data product-brand-id)
                                               product (dissoc (first (vals product)) :brand)]
                                           (hash-map product-id (assoc product :brand-title product-brand-title))))
-                                 select-product-data)]
-        (ok (map #(merge-with into %1 %2 %3) product-price-range product-images product-with-brand)))
+                                 select-product-data)
+            final-product-data (map #(merge-with into %1 %2 %3) product-price-range product-images product-with-brand)]
+        (ok (map (comp first vals) final-product-data)))
       (bad-request "Unable to retrieve product tags"))))
 
 
