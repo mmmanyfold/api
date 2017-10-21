@@ -9,37 +9,34 @@
     [clojure.core.async :refer [>! <! >!! <!! go chan]]
     [cheshire.core :as json]))
 
-(def ac {:access-token (or (env :access-token) (System/getenv "PICTURE_ROOM_FB_ACCESS_TOKEN"))})
+(def access-token {:access-token (or (env :access-token) (System/getenv "PICTURE_ROOM_FB_ACCESS_TOKEN"))})
 
-(defn async-get [url results-chan]
-  (http/get (str "https://graph.facebook.com/v2.5/" url "/picture")
-            {:oauth-token  (:access-token ac)
+(defn async-get [event results-chan]
+      (http/get (str "https://graph.facebook.com/v2.5/" (event :id) "/picture")
+            {:oauth-token  (:access-token access-token)
              :query-params {:redirect 0
                             :type     "large"}}
-            #(go (>! results-chan
-                     (json/parse-string (:body %) true)))))
+            (fn [res]
+              (go (>! results-chan
+                      (let [json (json/parse-string (:body res) true)
+                            picture_url (-> json :data :url)]
+                           (assoc event :picture_url picture_url)))))))
 
-(defn get-large-format-pics [ids]
+(defn get-large-format-pics [events]
   (let [c (chan)
         res (atom [])]
     ;; fetch>!
-    (doseq [id ids]
-      (async-get id c))
+    (doseq [e events]
+      (async-get e c))
     ;; gather!
-    (doseq [_ ids]
+    (doseq [_ events]
       (swap! res conj (<!! c)))
     @res))
 
 (defn get-fb-events []
-  (let [events-request (with-facebook-auth ac (client/get [:pictureroomnyc :events] {:extract :data}))
-        flatten-pic-urls (mapv #(:id %) events-request)
-        event-pic-urls-request (get-large-format-pics flatten-pic-urls)
-        join-requests (map (fn [e]
-                             (let [index (.indexOf flatten-pic-urls (:id e))
-                                   pic-url (get-in (get event-pic-urls-request index)
-                                                   [:data :url])]
-                               (assoc e :picture_url pic-url))) events-request)]
-    (response {:data join-requests})))
+  (let [events-request (with-facebook-auth access-token (client/get [:pictureroomnyc :events] {:extract :data}))
+        event-pic-urls-request (get-large-format-pics events-request)]
+    (response {:data event-pic-urls-request})))
 
 (defroutes fb-event-routes
            (GET "/fb-events" [] (get-fb-events)))
