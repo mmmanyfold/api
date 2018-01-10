@@ -83,42 +83,45 @@
 
 ;; for getting featured products
 
-(defn get-featured-products [_]
-  (let [{:keys [status body]} @(http/get "https://api.shoplightspeed.com/us/tags/products.json" basic-auth-header)]
-    (if (= 200 status)
-      (let [{tagsProducts :tagsProducts} (json/parse-string body true)
-            featured-tag-id 150470
-            featured-tag-data (filter #(= (-> % :tag :resource :id) featured-tag-id) tagsProducts)
-            featured-product-ids (map #(-> % :product :resource :id) featured-tag-data)
-            featured-products (get-product-data :featured featured-product-ids)
-            ;; filter visible products
-            featured-visible (filter #(:isVisible %) featured-products)
-            ;; retrieve brand data
-            brand-ids (distinct (map #(-> % :brand :resource :id) featured-visible))
-            brand-data (into (hash-map) (map #(hash-map (:id %) (:title %)) (get-product-data :brands brand-ids)))
-            featured-visible-ids (map :id featured-visible)
-            product-price-range (map #(hash-map (first (keys %)) (hash-map :price-range (first (vals %))))
-                                     (sort-by first (get-product-data :prices featured-visible-ids)))
-            product-images (map #(hash-map (first (keys %)) (hash-map :images (first (vals %))))
-                                (sort-by first (get-product-data :images featured-visible-ids)))
-            select-product-data (sort-by first
-                                  (map #(hash-map (:id %) (dissoc % :id))
-                                     (map #(select-keys % [:id :url :title :brand]) featured-visible)))
-            product-with-brand (map (fn [product]
-                                        (let [product-id (first (keys product))
-                                              product-brand-id (get-in (first (vals product)) [:brand :resource :id])
-                                              product-brand-title (get brand-data product-brand-id)
-                                              product (dissoc (first (vals product)) :brand)]
-                                          (hash-map product-id (assoc product :brand-title product-brand-title))))
-                                 select-product-data)
-            final-product-data (map #(merge-with into %1 %2 %3) product-price-range product-images product-with-brand)]
-        (ok (map (comp first vals) final-product-data)))
-      (bad-request "Unable to retrieve product tags"))))
+(defn get-tagged-products [req]
+  (let [tag-id (get-in req [:params :tag-id])]
+    (if (nil? tag-id)
+       (bad-request "No tag-id param provided")
+       (let [{:keys [status body]} @(http/get "https://api.shoplightspeed.com/us/tags/products.json" basic-auth-header)]
+         (if (= 200 status)
+          (let [{tagsProducts :tagsProducts} (json/parse-string body true)
+                tag-id->int (read-string tag-id)
+                featured-tag-data (filter #(= (-> % :tag :resource :id) tag-id->int) tagsProducts)
+                featured-product-ids (map #(-> % :product :resource :id) featured-tag-data)
+                featured-products (get-product-data :featured featured-product-ids)
+                ;; filter visible products
+                featured-visible (filter #(:isVisible %) featured-products)
+                ;; retrieve brand data
+                brand-ids (distinct (map #(-> % :brand :resource :id) featured-visible))
+                brand-data (into (hash-map) (map #(hash-map (:id %) (:title %)) (get-product-data :brands brand-ids)))
+                featured-visible-ids (map :id featured-visible)
+                product-price-range (map #(hash-map (first (keys %)) (hash-map :price-range (first (vals %))))
+                                         (sort-by first (get-product-data :prices featured-visible-ids)))
+                product-images (map #(hash-map (first (keys %)) (hash-map :images (first (vals %))))
+                                    (sort-by first (get-product-data :images featured-visible-ids)))
+                select-product-data (sort-by first
+                                      (map #(hash-map (:id %) (dissoc % :id))
+                                         (map #(select-keys % [:id :url :title :brand]) featured-visible)))
+                product-with-brand (map (fn [product]
+                                            (let [product-id (first (keys product))
+                                                  product-brand-id (get-in (first (vals product)) [:brand :resource :id])
+                                                  product-brand-title (get brand-data product-brand-id)
+                                                  product (dissoc (first (vals product)) :brand)]
+                                              (hash-map product-id (assoc product :brand-title product-brand-title))))
+                                     select-product-data)
+                final-product-data (map #(merge-with into %1 %2 %3) product-price-range product-images product-with-brand)]
+            (ok (map (comp first vals) final-product-data)))
+          (bad-request "Unable to retrieve product tags"))))))
 
 
 (defroutes lightspeed-ecom-routes
   (context "/lightspeed-ecom" []
     (context "/products" []
-      (GET "/featured" {params :params} get-featured-products)
+      (GET "/tagged" {params :params} get-tagged-products)
       (GET "/images" {params :params} multi-handle-product-request)
       (GET "/price-range" {params :params} multi-handle-product-request))))
