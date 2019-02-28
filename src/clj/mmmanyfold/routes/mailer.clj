@@ -3,14 +3,14 @@
             [compojure.core :refer [defroutes POST]]
             [ring.util.http-response :refer :all]))
 
-;; TODO: get :domain from params map as well
 (def creds {:key    (System/getenv "PLAYGROUND_MAILGUN_API_KEY")
             :domain "playgroundcoffeeshop.com"})
 
 (defn handle-posting-via-mailgun [req]
-  (let [{:keys [body subject to from]} (:params req)
+  (let [{:keys [body subject to from domain]} (:params req)
         mail-transact!
-        (mail/send-mail creds
+        (mail/send-mail (if domain
+                          (assoc creds :domain domain) creds)
                         {:from    from
                          :to      to
                          :subject subject
