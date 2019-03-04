@@ -3,7 +3,7 @@
             [compojure.core :refer [defroutes POST]]
             [ring.util.http-response :refer :all]))
 
-(def creds {:key    (System/getenv "PLAYGROUND_MAILGUN_API_KEY")
+(def creds {:key    (System/getenv "MMM_MAILGUN_API_KEY")
             :domain "playgroundcoffeeshop.com"})
 
 (defn handle-posting-via-mailgun [req]
