@@ -27,5 +27,6 @@
       (wrap-cors :access-control-allow-origin [#"http://localhost:3000"
                                                #"http://owlet.codefordenver.org"
                                                #"http://codefordenver.org"
-                                               #"https://codefordenver.github.io"]
+                                               #"https://codefordenver.github.io"
+                                               #"https://www.pictureroom.shop"]
                  :access-control-allow-methods [:get :post :put :delete])))
