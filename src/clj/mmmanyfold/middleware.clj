@@ -24,5 +24,8 @@
         (-> site-defaults
             (assoc-in [:security :anti-forgery] false)
             (assoc-in  [:session :store] (ttl-memory-store (* 60 30)))))
-      (wrap-cors :access-control-allow-origin [#".+"]
+      (wrap-cors :access-control-allow-origin [#"http://localhost:3000"
+                                               #"http://owlet.codefordenver.org"
+                                               #"http://codefordenver.org"
+                                               #"https://codefordenver.github.io"]
                  :access-control-allow-methods [:get :post :put :delete])))
