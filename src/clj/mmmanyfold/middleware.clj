@@ -28,5 +28,7 @@
                                                #"http://owlet.codefordenver.org"
                                                #"http://codefordenver.org"
                                                #"https://codefordenver.github.io"
-                                               #"https://www.pictureroom.shop"]
+                                               #"https://www.pictureroom.shop"
+                                               #"http://pictureroom.mcnallyjacksonstore.com"]
+
                  :access-control-allow-methods [:get :post :put :delete])))
