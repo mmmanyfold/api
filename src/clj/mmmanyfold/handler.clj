@@ -1,6 +1,5 @@
 (ns mmmanyfold.handler
   (:require [compojure.core :refer [routes wrap-routes]]
-            [mmmanyfold.routes.services :refer [service-routes]]
             [mmmanyfold.api :refer [api-routes]]
             [compojure.route :as route]
             [mmmanyfold.env :refer [defaults]]
@@ -14,9 +13,7 @@
 (def app-routes
   (routes
     #'api-routes
-    #'service-routes
     (route/not-found
       "page not found")))
-
 
 (defn app [] (middleware/wrap-base #'app-routes))
