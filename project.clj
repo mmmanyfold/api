@@ -34,7 +34,8 @@
                  [cheshire "5.6.3"]
                  [environ "1.0.2"]
                  [nilenso/mailgun "0.2.3"]
-                 [funcool/cuerdas "2.0.2"]]
+                 [funcool/cuerdas "2.0.2"]
+                 [try-let "1.3.1"]]
 
   :min-lein-version "2.0.0"
 
