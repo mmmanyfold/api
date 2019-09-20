@@ -27,6 +27,7 @@
       (wrap-cors :access-control-allow-origin [#"http://localhost:3000"
                                                #"http://owlet.codefordenver.org"
                                                #"http://codefordenver.org"
+                                               #"https://codefordenver.org"
                                                #"https://codefordenver.github.io"
                                                #"https://www.pictureroom.shop"
                                                #"http://pictureroom.mcnallyjacksonstore.com"]
